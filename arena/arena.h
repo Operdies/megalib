@@ -2,15 +2,15 @@
 #define __ARENA_H
 
 #ifndef ARENA_COMMIT
-#define ARENA_COMMIT (1l<<36)
+#define ARENA_COMMIT (1l<<38)
 #endif
 
 #include <stddef.h>
 
 typedef struct {
-	size_t size;      // total number of bytes that can be virtually addressed
-	size_t cursor;    // pointer from the base of the arena pointer where new data is allocated
-	size_t committed; // number of bytes actually committed. Increased as needed in arena_alloc
+	size_t size;      // Number of mapped bytes.
+	size_t cursor;    // Index to end of buffer.
+	size_t committed; // Number of mapped bytes that are allocated. Increased as needed in arena_alloc
 	char buffer[];    // the start of user allocated data
 } arena;
 
@@ -69,9 +69,18 @@ void* arena_alloc(arena *a, size_t nmemb, size_t mem_size) {
 	if (required > a->committed) {
 		// mprotect must be page aligned -- claim as many whole pages as needed
 		to_commit = required - (required % __pagesize) + __pagesize;
-		if (mprotect((char*)a + a->committed, to_commit, PROT_READ|PROT_WRITE))
+		if (mprotect(a, to_commit, PROT_READ|PROT_WRITE))
 			return NULL;
-		a->committed += to_commit;
+		
+		{ // touch each newly allocated page immediately. This forces them to be physically allocated.
+			// On real hardware, this is typically not needed, but when virtualization comes into the mix,
+			// we risk a SIGBUS when the memory is dereferenced. It is better in this case to fail early
+			char *loc = (char*)a;
+			for (size_t page_start = a->committed; page_start < + to_commit; page_start += __pagesize)
+				loc[page_start] = 0;
+		}
+
+		a->committed = to_commit;
 	}
 
 	a->cursor += size;

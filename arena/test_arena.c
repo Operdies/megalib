@@ -2,8 +2,26 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/time.h>
+
+void allocate_bigly() {
+	arena *a = mk_arena();
+	for (int i = 0; i < 30; i++) {
+		struct timeval start;
+		gettimeofday(&start, NULL);
+		if (!arena_alloc(a, 1 << 30, 1)) {
+			perror("arena_alloc:");
+			break;
+		}
+		struct timeval end;
+		gettimeofday(&end, NULL);
+		printf("Allocated %d GB in %ld ms\n", i+1, (end.tv_sec - start.tv_sec) * 1000 + (end.tv_usec - start.tv_usec) / 1000);
+	}
+	destroy_arena(a);
+}
 
 int main() {
+	allocate_bigly();
 	int outerest_trials = 10;
 	int inner_trials = 10;
 	for (int outerest = 0; outerest < outerest_trials; outerest++) {
