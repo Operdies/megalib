@@ -1,11 +1,9 @@
 SRC = arena.c test_arena.c
-CFLAGS = -std=c99 -pedantic -Wall -Os
+CFLAGS = -std=c99 -pedantic -Wall -O0 -g -DARENA_IMPLEMENTATION
 
-all: arena.o test_arena
+all: test_arena
 
-arena.o: arena.c arena.h Makefile
-
-test_arena: test_arena.c arena.o
+test_arena: test_arena.c arena.h
 
 test: test_arena
 	./test_arena

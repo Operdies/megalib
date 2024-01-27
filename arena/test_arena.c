@@ -1,4 +1,3 @@
-#define ARENA_COMMIT (1l<<36)
 #include "arena.h"
 #include <stdio.h>
 #include <string.h>
