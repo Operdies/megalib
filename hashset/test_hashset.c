@@ -1,6 +1,7 @@
 #include "hashset.h"
 #include <stdio.h>
 #include <stddef.h>
+#include <sys/time.h>
 
 #define LENGTH(X) (sizeof(X) / sizeof(X[0]))
 #define LOG(...) printf(__VA_ARGS__)
@@ -84,20 +85,97 @@ size_t hash_integer_bad(hashset_key key) {
   return key.integer;
 }
 
-int test_intmap() {
+#define TIME(stmnt)                                                                        \
+do {                                                                                       \
+  struct timeval ___STARTTIME___;                                                          \
+  gettimeofday(&___STARTTIME___, NULL);                                                    \
+  stmnt;                                                                                   \
+  struct timeval ___ENDTIME___;                                                            \
+  gettimeofday(&___ENDTIME___, NULL);                                                      \
+  timersub(&___ENDTIME___, &___STARTTIME___, &___ENDTIME___);                              \
+  printf("%2zus %3zu ms\n%s\n", ___ENDTIME___.tv_sec,  \
+      ___ENDTIME___.tv_usec / 1000, #stmnt);          \
+}                                                                                          \
+while (0); 
+
+// int test_is_prime() {
+//   for (int i = 3; i < 101; i+=2) {
+//     printf("%3d: %d\n", i, is_prime(i));
+//   }
+//   return 0;
+// }
+
+int test_small() {
+  i64 start = 0;
+  i64 end = 10;
+  i64 count = end - start;
+  hashset h2;
+  mk_hashset(&h2, hash_integer, NULL, 0);
+  hashset *h = &h2;
+  for (i64 i = start; i < end; i++) {
+    hashset_key key = { .integer = i };
+    hashset_add(h, (kvp_t) { .key = key, .value = { .integer = i * i } });
+
+    { // read back the key we just added
+      hashset_value value;
+      if (!hashset_get(h, key, &value)) {
+        printf("Failed to get %lld\n", i);
+        return 0;
+      }
+      if (value.integer != i * i) {
+        printf("Expected %lld, got %lld\n", i * i, value.integer);
+        return 0;
+      }
+    }
+  }
+
+  if (h->count != count) {
+    printf("Expected %lld elements, got %zu\n", count, h->count);
+    return 0;
+  }
+
+  for (i64 i = start; i < end; i++) {
+    i64 expected = i * i;
+    hashset_key key = { .integer = i };
+    hashset_value removed;
+    if (!hashset_remove(h, key, &removed)) {
+      printf("Failed to remove %lld/%lld\n", i, end);
+      return 0;
+    }
+    if (removed.integer != expected) {
+      printf("Expected %lld, got %lld\n", expected, removed.integer);
+      return 0;
+    }
+  }
+  if (h->count != 0) {
+    printf("Expected 0 elements, got %zu\n", h->count);
+    return 0;
+  }
+  return 1;
+  destroy_hashset(h);
+}
+
+int test_large2(hashset *h);
+int test_large() {
   hashset h;
+  mk_hashset(&h, hash_integer, NULL, 0);
+  int r = test_large2(&h);
+  destroy_hashset(&h);
+  return r;
+}
+int test_large2(hashset *h) {
   i64 start = 999;
   i64 end = 9999999;
   i64 count = end - start;
-  mk_hashset(&h, hash_integer, NULL, 0);
   for (int n = 0; n < 10; n++) {
     { // add a bunch of keys
       for (i64 i = start; i < end; i++) {
-        hashset_add(&h, (kvp_t) { .key = { .integer = i }, .value = { .integer = i * i } });
+        hashset_key key = { .integer = i };
+        hashset_add(h, (kvp_t) { .key = key, .value = { .integer = i * i } });
 
         { // read back the key we just added
           hashset_value value;
-          if (!hashset_get(&h, (hashset_key) { .integer = i }, &value)) {
+          if (!hashset_get(h, key, &value)) {
             printf("Failed to get %lld\n", i);
             return 0;
           }
@@ -108,17 +186,18 @@ int test_intmap() {
         }
       }
 
-      if (h.count != count) {
-        printf("Expected %lld elements, got %zu\n", count, h.count);
+      if (h->count != count) {
+        printf("Expected %lld elements, got %zu\n", count, h->count);
         return 0;
       }
     }
 
     { // override all the keys
       for (i64 i = start; i < end; i++) {
+        hashset_key key = { .integer = i };
         i64 expected = i * i;
         hashset_value removed;
-        if (!hashset_set(&h, (kvp_t) { .key = { .integer = i }, .value = { .integer = expected * i } }, &removed)) {
+        if (!hashset_set(h, (kvp_t) { .key = key, .value = { .integer = expected * i } }, &removed)) {
           printf("Failed to set %lld\n", i);
           return 0;
         }
@@ -132,9 +211,10 @@ int test_intmap() {
     { // remove the overriden keys
       for (i64 i = start; i < end; i++) {
         i64 expected = i * i * i;
+        hashset_key key = { .integer = i };
         hashset_value removed;
-        if (!hashset_remove(&h, (hashset_key) { .integer = i }, &removed)) {
-          printf("Failed to remove %lld\n", i);
+        if (!hashset_remove(h, key, &removed)) {
+          printf("Failed to remove %lld/%lld\n", i, end);
           return 0;
         }
         if (removed.integer != expected) {
@@ -142,18 +222,27 @@ int test_intmap() {
           return 0;
         }
       }
-      if (h.count != 0) {
-        printf("Expected 0 elements, got %zu\n", h.count);
+      if (h->count != 0) {
+        printf("Expected 0 elements, got %zu\n", h->count);
         return 0;
       }
     }
   }
-  destroy_hashset(&h);
-
   return 1;
 }
 
+int test_intmap() {
+  return 0;
+  // hashset h;
+  // i64 start = 999;
+  // i64 end = 9999999;
+  // i64 count = end - start;
+  // mk_hashset(&h, hash_integer, NULL, 0);
+  // return 0;
+}
+
 int main(void) {
-  return !test_intmap();
+  // return !test_small();
+  return !test_large();
   // return test_string_map();
 }
