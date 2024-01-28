@@ -1,4 +1,4 @@
-CFLAGS = -Wall -pedantic -Os
+CFLAGS = -std=c99 -Wall -pedantic -O3
 LDFLAGS = -lm
 SRC = hashset.c test_hashset.c
 OUT = test_hashset

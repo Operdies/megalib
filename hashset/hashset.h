@@ -9,10 +9,13 @@
 #include <stdbool.h>
 #include "../bitmap/bitmap.h"
 
+typedef unsigned long long i64;
+
 typedef union {
-  void    *pointer;
-  size_t  integer;
-  char    *string;
+  void     *pointer;
+  i64      integer;
+  double   real;
+  char     *string;
 } hashset_key;
 
 typedef hashset_key hashset_value;
@@ -39,7 +42,7 @@ typedef struct {
 } hashset;
 
 // Returns true if hashset contains the specified key
-bool hashset_contains(const hashset *h, const hashset_key key);
+bool hashset_get(const hashset *h, const hashset_key key, hashset_value *value);
 // Add a kvp_t to hashset if it doesn't already exist, returning true if a value was added.
 bool hashset_add(hashset *h, const kvp_t);
 // Set a kvp_t in hashset, returning true if a value was replaced. The replaced value is returned in *removed.
@@ -73,14 +76,22 @@ size_t hashmap_strcmp(const hashset_key a, const hashset_key b);
 
 #define LENGTH(X) (sizeof(X) / sizeof(X[0]))
 
-size_t primes[] = { 53, 97, 193, 389, 769, 1543, 3079, 6151, 12289, 24593, 49157, 98317, 196613, 393241, 786433, 1572869, 3145739, 6291469, 12582917, 25165843, 50331653, 100663319, 201326611, 402653189, 805306457, 1610612741 };
+const size_t coefficients[] = { 1073741827, 1073741831, 1073741833, 1073741839, 1073741843, 1073741857, 1073741891, 1073741909, 1073741939, 1073741953, 1073741969, 1073741971, 1073741987, 1073741993, 1073742037, 1073742053, 1073742073, 1073742077, 1073742091, 1073742113, 1073742169, 1073742203, 1073742209, 1073742223, 1073742233, 1073742259, 1073742277, 1073742289, 1073742343, 1073742353, 1073742361, 1073742391, 1073742403, 1073742463, 1073742493, 1073742517, 1073742583, 1073742623, 1073742653, 1073742667, 1073742671, 1073742673, 1073742707, 1073742713, 1073742721, 1073742731, 1073742767, 1073742773, 1073742811, 1073742851, 1073742853, 1073742881, 1073742889, 1073742913, 1073742931, 1073742937, 1073742959, 1073742983, 1073743007, 1073743037, 1073743049, 1073743051, 1073743079, 1073743091, 1073743093, 1073743123, 1073743129, 1073743141, 1073743159, 1073743163, 1073743189, 1073743199, 1073743207, 1073743243, 1073743291, 1073743303, 1073743313, 1073743327, 1073743331, 1073743337, 1073743381, 1073743387, 1073743393, 1073743397, 1073743403, 1073743417, 1073743421, 1073743427, 1073743457, 1073743459, 1073743469, 1073743501, 1073743507, 1073743513, 1073743543, 1073743577, 1073743591, 1073743633, 1073743739, 1073743757, };
+
+size_t hash(size_t x) {
+  x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9l;
+  x = (x ^ (x >> 27)) * 0x94d049bb133111ebl;
+  x = x ^ (x >> 31);
+  return x;
+}
 
 size_t hash_integer(hashset_key key) {
-  return key.integer;
+  return hash(key.integer);
 }
 
 size_t hash_pointer(hashset_key key) {
-  return (size_t)key.pointer / sizeof(size_t);
+  key.integer /= 8;
+  return hash_integer(key);
 }
 
 size_t hash_string(hashset_key key) {
@@ -88,8 +99,8 @@ size_t hash_string(hashset_key key) {
   size_t hash, idx;
   hash = 0;
   for (idx = 0; *str; idx++, str++) {
-    size_t prime = primes[idx % LENGTH(primes)];
-    hash = (hash ^ prime) + (*str * prime);
+    size_t prime = coefficients[idx % LENGTH(coefficients)];
+    hash ^= (*str * prime);
   }
   return hash;
 }
@@ -126,9 +137,11 @@ void mk_hashset(hashset *h, hashfunc_t hashfunc, cmpfunc_t cmpfunc, size_t sz) {
   h->capacity = sz;
   h->hashfunc = hashfunc;
   h->cmpfunc = cmpfunc ? cmpfunc : default_equality;
-  h->keys = calloc(sz, sizeof(hashset_key));
-  h->values = calloc(sz, sizeof(hashset_value));
-  h->occupied = mk_bitmap(sz);
+  if (sz) {
+    h->keys = calloc(sz, sizeof(hashset_key));
+    h->values = calloc(sz, sizeof(hashset_value));
+    h->occupied = mk_bitmap(sz);
+  }
 }
 
 void destroy_hashset(hashset *h) {
@@ -138,22 +151,33 @@ void destroy_hashset(hashset *h) {
 }
 
 bool hashset_contains_slot(const hashset *h, const hashset_key key, size_t *index) {
-  size_t hash, slot;
+  if (h->count == 0) return false;
+  size_t hash, slot, guard, collissions;
   hash = h->hashfunc(key);
   slot = hash % h->capacity;
+  guard = slot;
+  collissions = 0;
   while (bit_set(h->occupied, slot)) {
+    collissions++;
     if (h->cmpfunc(h->keys[slot], key) == 0) {
       if (index) 
         *index = slot;
       return true;
     }
     slot = (slot + 1) % h->capacity;
+    if (slot == guard) break;
   }
   return false;
 }
 
-bool hashset_contains(const hashset *h, const hashset_key key) {
-  return hashset_contains_slot(h, key, NULL);
+bool hashset_get(const hashset *h, const hashset_key key, hashset_value *value) {
+  if (h->count == 0) return false;
+  size_t index;
+  if (hashset_contains_slot(h, key, &index)) {
+    *value = h->values[index];
+    return true;
+  }
+  return false;
 }
 
 bool hash_insert(hashset *h, kvp_t kvp) {
@@ -199,21 +223,35 @@ bool hashset_add(hashset *h, const kvp_t kvp) {
 
 bool hashset_remove(hashset *h, const hashset_key key, hashset_value *removed) {
   size_t index;
-  if (hashset_contains_slot(h, key, &index)) {
+  if (!hashset_contains_slot(h, key, &index))
+    return false;
+  if (removed)
     *removed = h->values[index];
-    h->values[index] = (hashset_value) { 0 };
-    h->keys[index] = (hashset_key) { 0 };
+
+  set_bit(h->occupied, index, 0);
+  h->count--;
+  index = index + 1 % h->capacity;
+  while (bit_set(h->occupied, index)) {
     set_bit(h->occupied, index, 0);
     h->count--;
-    return true;
+    kvp_t kvp = { .key = h->keys[index], .value = h->values[index] };
+    hashset_add(h, kvp);
+    index = index + 1 % h->capacity;
   }
-  return false;
+  return true;
 }
 
 bool hashset_set(hashset *h, const kvp_t kvp, hashset_value *removed) {
-  bool value_removed = hashset_remove(h, kvp.key, removed);
-  hashset_add(h, kvp);
-  return value_removed;
+  size_t index;
+  if (hashset_contains_slot(h, kvp.key, &index)) {
+    if (removed)
+      *removed = h->values[index];
+    h->keys[index] = kvp.key;
+    h->values[index] = kvp.value;
+    return true;
+  } else {
+    return hashset_add(h, kvp);
+  }
 }
 
 void hashset_print(hashset *h, formatfunc f) {

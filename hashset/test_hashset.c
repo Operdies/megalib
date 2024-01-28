@@ -1,5 +1,6 @@
 #include "hashset.h"
 #include <stdio.h>
+#include <stddef.h>
 
 #define LENGTH(X) (sizeof(X) / sizeof(X[0]))
 #define LOG(...) printf(__VA_ARGS__)
@@ -78,6 +79,81 @@ int test_string_map() {
   return 0;
 }
 
+// hashing function which colliddes a lot
+size_t hash_integer_bad(hashset_key key) {
+  return key.integer;
+}
+
+int test_intmap() {
+  hashset h;
+  i64 start = 999;
+  i64 end = 9999999;
+  i64 count = end - start;
+  mk_hashset(&h, hash_integer, NULL, 0);
+  for (int n = 0; n < 10; n++) {
+    { // add a bunch of keys
+      for (i64 i = start; i < end; i++) {
+        hashset_add(&h, (kvp_t) { .key = { .integer = i }, .value = { .integer = i * i } });
+
+        { // read back the key we just added
+          hashset_value value;
+          if (!hashset_get(&h, (hashset_key) { .integer = i }, &value)) {
+            printf("Failed to get %lld\n", i);
+            return 0;
+          }
+          if (value.integer != i * i) {
+            printf("Expected %lld, got %lld\n", i * i, value.integer);
+            return 0;
+          }
+        }
+      }
+
+      if (h.count != count) {
+        printf("Expected %lld elements, got %zu\n", count, h.count);
+        return 0;
+      }
+    }
+
+    { // override all the keys
+      for (i64 i = start; i < end; i++) {
+        i64 expected = i * i;
+        hashset_value removed;
+        if (!hashset_set(&h, (kvp_t) { .key = { .integer = i }, .value = { .integer = expected * i } }, &removed)) {
+          printf("Failed to set %lld\n", i);
+          return 0;
+        }
+        if (removed.integer != expected) {
+          printf("Expected %lld, got %lld\n", expected, removed.integer);
+          return 0;
+        }
+      }
+    }
+
+    { // remove the overriden keys
+      for (i64 i = start; i < end; i++) {
+        i64 expected = i * i * i;
+        hashset_value removed;
+        if (!hashset_remove(&h, (hashset_key) { .integer = i }, &removed)) {
+          printf("Failed to remove %lld\n", i);
+          return 0;
+        }
+        if (removed.integer != expected) {
+          printf("Expected %lld, got %lld\n", expected, removed.integer);
+          return 0;
+        }
+      }
+      if (h.count != 0) {
+        printf("Expected 0 elements, got %zu\n", h.count);
+        return 0;
+      }
+    }
+  }
+  destroy_hashset(&h);
+
+  return 1;
+}
+
 int main(void) {
-  return test_string_map();
+  return !test_intmap();
+  // return test_string_map();
 }
