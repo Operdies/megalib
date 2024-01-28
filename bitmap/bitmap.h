@@ -4,8 +4,8 @@
 #include <stddef.h>
 #include <stdbool.h>
 
-typedef size_t bitmap_t;
-typedef size_t bit_t;
+typedef unsigned char bitmap_t;
+typedef unsigned char bit_t;
 
 // Make a new bitmap with the given capacity
 bitmap_t *mk_bitmap(size_t capacity);
@@ -27,21 +27,22 @@ void toggle_bit(bitmap_t *bitmap, size_t idx);
 #include <stdio.h>
 
 bitmap_t *mk_bitmap(size_t capacity) {
-  size_t size = (capacity / sizeof(bitmap_t)) + 1;
-  return calloc(size, 1);
+  return calloc(capacity / (8 * sizeof(bitmap_t)) + 1, sizeof(bitmap_t));
 }
 
 void destroy_bitmap(bitmap_t *bitmap) {
   free(bitmap);
 }
 
-bool bit_set(const bitmap_t *bitmap, size_t idx) {
-  size_t index, bit, byte;
-  index = idx / (sizeof(bitmap_t) * 8);
-  bit = idx % (sizeof(bitmap_t) * 8);
-  byte = bitmap[index];
-  bit = (byte >> bit) & 1l;
-  return bit;
+size_t bitmap_sum(bitmap_t *bitmap, size_t bitmap_size) {
+  size_t sum = 0;
+  for (size_t i = 0; i < bitmap_size; i++)
+    sum += bit_set(bitmap, i) ? 1 : 0;
+  return sum;
+}
+
+inline bool bit_set(const bitmap_t *bitmap, size_t idx) {
+  return (bitmap[idx/8] >> (idx % 8)) & 1;
 }
 
 void set_bit(bitmap_t *bitmap, size_t idx, bit_t value) {

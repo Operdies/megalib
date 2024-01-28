@@ -1,4 +1,4 @@
-CFLAGS = -Wall -pedantic -O0 -g
+CFLAGS = -Wall -pedantic -O3 -g
 SRC = test_bitmap.c
 OUT = test_bitmap
 
