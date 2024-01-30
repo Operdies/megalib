@@ -61,7 +61,7 @@ size_t hash_pointer(const hashset_key);
 // Print each key in the hashset, formatting the kvp with the provided formatter
 void hashset_print(hashset *h, formatfunc f);
 // Wrapper around strcmp from <string.h> that accepts null pointers
-size_t hashmap_strcmp(const hashset_key a, const hashset_key b);
+size_t hashset_strcmp(const hashset_key a, const hashset_key b);
 
 #ifdef HASHSET_IMPLEMENTATION
 
@@ -92,7 +92,7 @@ size_t hash_string(hashset_key key) {
   return hash;
 }
 
-size_t hashmap_strcmp(const hashset_key a, const hashset_key b) {
+size_t hashset_strcmp(const hashset_key a, const hashset_key b) {
   if (a.string == NULL || b.string == NULL)
     return a.integer - b.integer;
   return strcmp(a.string, b.string);
@@ -137,6 +137,8 @@ void destroy_hashset(hashset *h) {
   free(h->used);
 }
 
+#define next_slot(slot) (((slot) + 1) % h->capacity)
+
 bool hashset_contains_key(const hashset *h, const hashset_key key, size_t *index) {
   if (h->count == 0) return false;
   size_t hash, slot;
@@ -148,7 +150,7 @@ bool hashset_contains_key(const hashset *h, const hashset_key key, size_t *index
         *index = slot;
       return true;
     }
-    slot = (slot + 1) % h->capacity;
+    slot = next_slot(slot);
   }
   return false;
 }
@@ -171,7 +173,7 @@ bool hash_insert(hashset *h, kvp_t kvp) {
     if (h->cmpfunc(h->keys[slot], kvp.key) == 0) {
       return false;
     }
-    slot = (slot + 1) % h->capacity;
+    slot = next_slot(slot);
   }
   h->used[slot] = 1;
   h->keys[slot] = kvp.key;
@@ -204,22 +206,22 @@ bool hashset_add(hashset *h, const kvp_t kvp) {
 }
 
 bool hashset_remove(hashset *h, const hashset_key key, hashset_value *removed) {
-  size_t index;
-  if (!hashset_contains_key(h, key, &index))
+  size_t slot;
+  if (!hashset_contains_key(h, key, &slot))
     return false;
   if (removed)
-    *removed = h->values[index];
+    *removed = h->values[slot];
 
-  h->used[index] = 0;
+  h->used[slot] = 0;
   h->count--;
 
-  index = (index + 1) % h->capacity;
-  while (h->used[index]) {
-    h->used[index] = 0;
+  slot = next_slot(slot);
+  while (h->used[slot]) {
+    h->used[slot] = 0;
     h->count--;
-    kvp_t kvp = { .key = h->keys[index], .value = h->values[index] };
+    kvp_t kvp = { .key = h->keys[slot], .value = h->values[slot] };
     hash_insert(h, kvp);
-    index = (index + 1) % h->capacity;
+    slot = next_slot(slot);
   }
 
   return true;

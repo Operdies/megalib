@@ -14,7 +14,7 @@ char *strfmt(kvp_t kvp) {
 
 int test_string_map() {
   hashset h;
-  mk_hashset(&h, hash_string, hashmap_strcmp, 7);
+  mk_hashset(&h, hash_string, hashset_strcmp, 7);
   hashset_print(&h, strfmt);
   kvp_t test_keys[] = {
     { .key =  { "123" } , .value = { "456" } },
