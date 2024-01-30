@@ -192,8 +192,8 @@ int test_large2(hashset *h) {
       }
     }
 
-    { // override all the keys
-      for (i64 i = start; i < end; i++) {
+    { // override all the keys in reverse
+      for (i64 i = end - 1; i >= start; i--) {
         hashset_key key = { .integer = i };
         i64 expected = i * i;
         hashset_value removed;
