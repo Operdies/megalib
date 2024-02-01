@@ -20,6 +20,7 @@ arena* mk_arena(void);
 void destroy_arena(arena *a);
 // allocate nmemb * sz bytes of memory
 void *arena_alloc(arena *a, size_t nmemb, size_t size);
+#endif // __ARENA_H
 
 #ifdef ARENA_IMPLEMENTATION
 #include <sys/mman.h>
@@ -88,5 +89,4 @@ void* arena_alloc(arena *a, size_t nmemb, size_t mem_size) {
 }
 
 #endif // ARENA_IMPLEMENTATION
-#endif // __ARENA_H
 
