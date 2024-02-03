@@ -1,8 +1,10 @@
 #ifndef BENCHMARK_H
 #define BENCHMARK_H
-#include <sys/time.h>
+#include <time.h>
+#include <bsd/sys/time.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 
 // avoid linking math just for a sqrt function
@@ -42,29 +44,56 @@ static inline void print_centered(const char *centered_in, const char *value){
   printf("%.*s%s%.*s\n", pad, divider, value, len - pad - value_len, divider);
 }
 
-static inline void print_summary(const char *benchstr, const struct timeval *m, int n) {
-  struct timeval sum = {0};
+struct timespec spec_from_double(double t) {
+  struct timespec spec;
+  spec.tv_sec = (time_t)(t / 1e9);
+  spec.tv_nsec = t - (double)spec.tv_sec * 1e9;
+  return spec;
+}
+
+void readable_time(struct timespec time, char buf[30]){
+  char *units[] = { "s", "ms", "μs", "ns" };
+  if (time.tv_sec > 0) {
+    snprintf(buf, 30, "%.3f %s", time.tv_sec + time.tv_nsec * 1e-9, units[0]);
+  } else if (time.tv_nsec > 1e6) {
+    snprintf(buf, 30, "%.3f %s", time.tv_nsec * 1e-6, units[1]);
+  } else if (time.tv_nsec > 1e3) {
+    snprintf(buf, 30, "%.3f %s", time.tv_nsec * 1e-3, units[2]);
+  } else {
+    snprintf(buf, 30, "%ld %s", time.tv_nsec, units[3]);
+  }
+}
+
+static inline void print_summary(const char *benchstr, const struct timespec *m, int n) {
+  struct timespec sum = {0};
   double mean, stddev, stderr, total_us;
   for (int i = 0; i < n; i++) {
-    timeradd(&sum, &m[i], &sum);
+    timespecadd(&sum, &m[i], &sum);
   }
 
-  total_us = sum.tv_sec * 1e6 + sum.tv_usec;
+  total_us = sum.tv_sec * 1e9 + sum.tv_nsec;
   mean = total_us / n;
   stddev = 0;
   for (int i = 0; i < n; i++) {
-    double diff = (m[i].tv_sec * 1e6 + m[i].tv_usec) - mean;
+    double diff = (m[i].tv_sec * 1e9 + m[i].tv_nsec) - mean;
     stddev += diff * diff;
   }
 
   stderr = sqroot(stddev / n);
-
+  
   char buf[100];
-  snprintf(buf, 100, " %.0f μs ± %.0f μs ", mean, stderr);
+  char mean_s[30];
+  char err_s[30];
+  struct timespec mean_spec = spec_from_double(mean);
+  struct timespec err_spec = spec_from_double(stderr);
+  readable_time(mean_spec, mean_s);
+  readable_time(err_spec, err_s);
+
+  snprintf(buf, 100, " %s ± %s ", mean_s, err_s);
   print_centered(benchstr, buf);
   printf("%.*s\n", (int)strlen(benchstr), divider);                      
 }
-#define max_runs 100000
+#define max_runs 10000000
 #define min_runs 10
 #define clamp(x, lo, hi) ((x) < (lo) ? (lo) : (x) > (hi) ? (hi) : (x))
 #define benchmark(fname, ...)                                                 \
@@ -72,26 +101,27 @@ static inline void print_summary(const char *benchstr, const struct timeval *m, 
 const char testname[] = "    Benchmark " #fname "(" #__VA_ARGS__ ")    ";     \
 print_divider(testname);                                                      \
 print_centered(testname, " WARMING UP ");                                     \
-struct timeval start, now, elapsed;                                           \
-gettimeofday(&start, NULL);                                                   \
+struct timespec start, now, elapsed;                                          \
+clock_gettime(CLOCK_REALTIME, &start);                                        \
 int runs = 0;                                                                 \
 while (1) {                                                                   \
-  gettimeofday(&now, NULL);                                                   \
-  timersub(&now, &start, &elapsed);                                           \
-  if (elapsed.tv_sec >= 1) break;                                             \
+  clock_gettime(CLOCK_REALTIME, &now);                                        \
+  timespecsub(&now, &start, &elapsed);                                        \
+  if (elapsed.tv_sec >= 3) break;                                             \
   (void)fname(__VA_ARGS__);                                                   \
   runs++;                                                                     \
 }                                                                             \
 print_centered(testname, " BENCHMARKING ");                                   \
 runs = clamp(runs, min_runs, max_runs);                                       \
-struct timeval measurements[max_runs];                                        \
+struct timespec *measurements = malloc(sizeof(struct timespec) * runs);       \
 for (int i = 0; i < runs; i++) {                                              \
-  gettimeofday(&start, NULL);                                                 \
+  clock_gettime(CLOCK_REALTIME, &start);                                      \
   (void)fname(__VA_ARGS__);                                                   \
-  gettimeofday(&now, NULL);                                                   \
-  timersub(&now, &start, &measurements[i]);                                   \
+  clock_gettime(CLOCK_REALTIME, &now);                                        \
+  timespecsub(&now, &start, &measurements[i]);                                \
 }                                                                             \
 print_summary(testname, measurements, runs);                                  \
+free(measurements);                                                           \
 }
 
 #endif
