@@ -98,30 +98,30 @@ static inline void print_summary(const char *benchstr, const struct timespec *m,
 #define clamp(x, lo, hi) ((x) < (lo) ? (lo) : (x) > (hi) ? (hi) : (x))
 #define benchmark(fname, ...)                                                 \
 {                                                                             \
-const char _m_testname[] = "    Benchmark " #fname "(" #__VA_ARGS__ ")    ";     \
-print_divider(_m_testname);                                                      \
-print_centered(_m_testname, " WARMING UP ");                                     \
-struct timespec _m_start, _m_now, _m_elapsed;                                          \
-clock_gettime(CLOCK_REALTIME, &_m_start);                                        \
-int _m_runs = 0;                                                                 \
+const char _m_testname[] = "    Benchmark " #fname "(" #__VA_ARGS__ ")    ";  \
+print_divider(_m_testname);                                                   \
+print_centered(_m_testname, " WARMING UP ");                                  \
+struct timespec _m_start, _m_now, _m_elapsed;                                 \
+clock_gettime(CLOCK_REALTIME, &_m_start);                                     \
+int _m_runs = 0;                                                              \
 while (1) {                                                                   \
-  clock_gettime(CLOCK_REALTIME, &_m_now);                                        \
-  timespecsub(&_m_now, &_m_start, &_m_elapsed);                                        \
-  if (_m_elapsed.tv_sec >= 3) break;                                             \
+  clock_gettime(CLOCK_REALTIME, &_m_now);                                     \
+  timespecsub(&_m_now, &_m_start, &_m_elapsed);                               \
+  if (_m_elapsed.tv_sec >= 3) break;                                          \
   (void)fname(__VA_ARGS__);                                                   \
-  _m_runs++;                                                                     \
+  _m_runs++;                                                                  \
 }                                                                             \
-print_centered(_m_testname, " BENCHMARKING ");                                   \
-_m_runs = clamp(_m_runs, min_runs, max_runs);                                       \
-struct timespec *_m_measurements = malloc(sizeof(struct timespec) * _m_runs);       \
-for (int i = 0; i < _m_runs; i++) {                                              \
-  clock_gettime(CLOCK_REALTIME, &_m_start);                                      \
+print_centered(_m_testname, " BENCHMARKING ");                                \
+_m_runs = clamp(_m_runs, min_runs, max_runs);                                 \
+struct timespec *_m_measurements = malloc(sizeof(struct timespec) * _m_runs); \
+for (int i = 0; i < _m_runs; i++) {                                           \
+  clock_gettime(CLOCK_REALTIME, &_m_start);                                   \
   (void)fname(__VA_ARGS__);                                                   \
-  clock_gettime(CLOCK_REALTIME, &_m_now);                                        \
-  timespecsub(&_m_now, &_m_start, &_m_measurements[i]);                                \
+  clock_gettime(CLOCK_REALTIME, &_m_now);                                     \
+  timespecsub(&_m_now, &_m_start, &_m_measurements[i]);                       \
 }                                                                             \
-print_summary(_m_testname, _m_measurements, _m_runs);                                  \
-free(_m_measurements);                                                           \
+print_summary(_m_testname, _m_measurements, _m_runs);                         \
+free(_m_measurements);                                                        \
 }
 
 #endif
