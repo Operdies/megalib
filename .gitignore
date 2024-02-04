@@ -1,0 +1,8 @@
+*.o
+tags
+test_arena
+test_benchmark
+test_bitmap
+test_hashset
+test_trees
+test_unittest
