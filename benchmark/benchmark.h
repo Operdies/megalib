@@ -29,12 +29,14 @@ static inline void print_divider(const char *benchstr) {
 }
 
 static inline size_t utf8_strlen(const char *s){
-  size_t i = 0, j = 0;
-  while (s[i]) {
-    if ((s[i] & 0xC0) != 0x80) j++;
-    i++;
-  }
-  return j;
+  size_t count = 0;
+  // If a byte starts with '11', it is the start of a multi-byte encoding
+  // If a byte starts with '10', it is a continuation byte in a multi-byte encoding
+  // To compute the string length, then, we need only skip all continuation bytes
+  // s is assumed to be a valid utf-8 encoding.
+  size_t mask = 3 << 6;
+  for (; *s; count += (*s & mask) != mask, s++);
+  return count;
 }
 
 static inline void print_centered(const char *centered_in, const char *value){
